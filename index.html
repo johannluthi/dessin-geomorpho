@@ -107,7 +107,7 @@ main{grid-area:main;position:relative;min-width:0;min-height:0;background:var(--
       <select id="sDash"><option value="solid">Continu</option><option value="dashed">Tirets</option><option value="dotted">Pointillé</option></select></div>
     <div class="row"><label for="sFill">Remplissage</label><input type="range" id="sFill" min="0" max="0.8" step="0.05"></div>
     <div class="row"><label for="sLabel">Légende</label><input type="text" id="sLabel" placeholder="Nom de la forme"></div>
-    <div class="row"><label for="sSmooth">Lissage</label><input type="checkbox" id="sSmooth"></div>
+    <div class="row"><label for="sRound">Arrondi</label><input type="range" id="sRound" min="0" max="1" step="0.05" title="0 = angles vifs, 1 = très arrondi"></div>
     <div class="btns">
       <button id="bFinish">Terminer le tracé</button>
       <button id="bDelete">Supprimer la sélection</button>
@@ -133,7 +133,7 @@ let tool = "pan", view = { s: 1, x: 0, y: 0 }, dpr = 1;
 let draft = null, cursor = null, drag = null, pinch = null, spaceDown = false, stylePushed = false, autoFit = true;
 const stage = $("#stage");
 const ptrs = new Map();
-const cur = { c: "#e63946", w: 3, d: "solid", f: 0, l: "", smooth: true };
+const cur = { c: "#e63946", w: 3, d: "solid", f: 0, l: "", round: 0.4 };
 
 const TOOLS = [
   { id: "pan",    ico: "✋", name: "Main",      hint: "Glisser pour déplacer la photo. Molette ou pincement pour zoomer." },
@@ -203,31 +203,30 @@ function hit(o, pt, tol) {
 }
 
 // ---------- Dessin ----------
-function tracePath(g, p, closed, smooth) {
+function tracePath(g, p, closed, round) {
   const n = p.length;
   g.beginPath();
   if (!n) return;
-  if (!smooth || n < 3) {
+  if (!round || n < 3) {
     g.moveTo(p[0][0], p[0][1]);
     for (let i = 1; i < n; i++) g.lineTo(p[i][0], p[i][1]);
     if (closed) g.closePath();
     return;
   }
-  const mid = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+  const t = 0.5 * round;
+  const toward = (a, b) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+  const corner = (q, prev, next) => {
+    const a = toward(q, prev), b = toward(q, next);
+    g.lineTo(a[0], a[1]); g.quadraticCurveTo(q[0], q[1], b[0], b[1]);
+  };
   if (closed) {
-    const m0 = mid(p[n - 1], p[0]);
-    g.moveTo(m0[0], m0[1]);
-    for (let i = 0; i < n; i++) {
-      const q = p[i], m = mid(q, p[(i + 1) % n]);
-      g.quadraticCurveTo(q[0], q[1], m[0], m[1]);
-    }
+    const s0 = toward(p[0], p[n - 1]);
+    g.moveTo(s0[0], s0[1]);
+    for (let i = 0; i < n; i++) corner(p[i], p[(i + n - 1) % n], p[(i + 1) % n]);
     g.closePath();
   } else {
     g.moveTo(p[0][0], p[0][1]);
-    for (let i = 1; i < n - 1; i++) {
-      const m = mid(p[i], p[i + 1]);
-      g.quadraticCurveTo(p[i][0], p[i][1], m[0], m[1]);
-    }
+    for (let i = 1; i < n - 1; i++) corner(p[i], p[i - 1], p[i + 1]);
     g.lineTo(p[n - 1][0], p[n - 1][1]);
   }
 }
@@ -270,7 +269,7 @@ function drawObj(g, o) {
     g.setLineDash([]); head(); g.fillStyle = o.c; g.fill();
     g.restore(); return;
   }
-  tracePath(g, o.p, closed, o.s);
+  tracePath(g, o.p, closed, o.s === true ? 1 : o.s === false ? 0 : o.s);
   if (closed && o.f > 0) { g.globalAlpha = o.f; g.fillStyle = o.c; g.fill(); g.globalAlpha = 1; }
   g.setLineDash(dashFor(o.d, w));
   g.strokeStyle = "rgba(255,255,255,.55)"; g.lineWidth = w + 2 * u; g.stroke();
@@ -354,7 +353,7 @@ function syncButtons() {
 
 // ---------- Objets ----------
 function newObj(t, p) {
-  return { t, p, c: cur.c, w: cur.w, d: cur.d, f: t === "poly" ? cur.f : 0, l: cur.l, s: t === "free" ? true : cur.smooth };
+  return { t, p, c: cur.c, w: cur.w, d: cur.d, f: t === "poly" ? cur.f : 0, l: cur.l, s: t === "free" ? 1 : cur.round };
 }
 function finishDraft() {
   if (!draft) return;
@@ -367,7 +366,7 @@ function selectObj(o) {
   sel = o; stylePushed = false;
   if (o) {
     cur.c = o.c; cur.w = o.w;
-    if (o.t !== "text") { cur.d = o.d; cur.l = o.l || ""; cur.smooth = !!o.s; if (o.t === "poly") cur.f = o.f; }
+    if (o.t !== "text") { cur.d = o.d; cur.l = o.l || ""; cur.round = o.s === true ? 1 : +o.s || 0; if (o.t === "poly") cur.f = o.f; }
     syncControls();
   }
   syncButtons();
@@ -398,7 +397,7 @@ $("#tools").append(...TOOLS.map(t => {
 // ---------- Panneau de style ----------
 function syncControls() {
   $("#sColor").value = cur.c; $("#sWidth").value = cur.w; $("#sDash").value = cur.d;
-  $("#sFill").value = cur.f; $("#sLabel").value = cur.l; $("#sSmooth").checked = cur.smooth;
+  $("#sFill").value = cur.f; $("#sLabel").value = cur.l; $("#sRound").value = cur.round;
   document.querySelectorAll("#presets button").forEach(b => {
     const p = PRESETS[b.dataset.i];
     b.classList.toggle("on", p.name === cur.l);
@@ -413,7 +412,7 @@ function applyStyle(patch) {
     if (sel.t !== "text") {
       if ("d" in patch) sel.d = cur.d;
       if ("l" in patch) sel.l = cur.l;
-      if ("smooth" in patch) sel.s = cur.smooth;
+      if ("round" in patch) sel.s = cur.round;
       if ("f" in patch && sel.t === "poly") sel.f = cur.f;
     }
     updateLegend();
@@ -425,8 +424,8 @@ $("#sWidth").oninput = e => applyStyle({ w: +e.target.value });
 $("#sDash").onchange = e => applyStyle({ d: e.target.value });
 $("#sFill").oninput = e => applyStyle({ f: +e.target.value });
 $("#sLabel").oninput = e => applyStyle({ l: e.target.value });
-$("#sSmooth").onchange = e => applyStyle({ smooth: e.target.checked });
-["#sColor", "#sWidth", "#sFill"].forEach(s => $(s).addEventListener("change", () => (stylePushed = false)));
+$("#sRound").oninput = e => applyStyle({ round: +e.target.value });
+["#sColor", "#sWidth", "#sFill", "#sRound"].forEach(s => $(s).addEventListener("change", () => (stylePushed = false)));
 
 PRESETS.forEach((p, i) => {
   const b = document.createElement("button");
