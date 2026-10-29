@@ -77,8 +77,7 @@ main{grid-area:main;position:relative;min-width:0;min-height:0;background:var(--
     <label class="chk"><input type="checkbox" id="optLegend" checked> Légende dans l'export</label>
     <label class="chk">Taille <input type="range" id="optLegendSize" min="1" max="4" step="0.25" value="2" style="width:90px"></label>
     <button id="bPng">Exporter en PNG</button>
-    <button id="bSave">Enregistrer le projet</button>
-    <input type="file" id="file" accept="image/*,.json,application/json" hidden>
+    <input type="file" id="file" accept="image/*" hidden>
   </header>
 
   <nav id="tools"></nav>
@@ -87,7 +86,6 @@ main{grid-area:main;position:relative;min-width:0;min-height:0;background:var(--
     <canvas id="cv"></canvas>
     <div id="empty">
       <div style="font-size:18px">Glissez une photo ici, collez-la (Ctrl+V) ou ouvrez un fichier</div>
-      <div>Vous pouvez aussi rouvrir un projet enregistré (.json)</div>
       <button id="bOpen2" class="primary">Ouvrir une photo</button>
     </div>
     <div id="hint"></div>
@@ -351,7 +349,7 @@ function refresh() { render(); updateLegend(); syncButtons(); }
 function syncButtons() {
   $("#bUndo").disabled = !hist.length; $("#bRedo").disabled = !redoStack.length;
   $("#bDelete").disabled = !sel; $("#bFinish").disabled = !draft;
-  $("#bPng").disabled = $("#bSave").disabled = !img;
+  $("#bPng").disabled = !img;
 }
 
 // ---------- Objets ----------
@@ -652,13 +650,7 @@ async function handleFile(f) {
   if (f.type.startsWith("image/")) {
     if (objs.length && !confirm("Remplacer la photo ? Les dessins actuels seront effacés.")) return;
     loadImage(await readFile(f), f.name, false);
-  } else if (/\.json$/i.test(f.name)) {
-    try {
-      const d = JSON.parse(await readFile(f, true));
-      if (!d.img || !Array.isArray(d.objs)) throw 0;
-      loadImage(d.img, d.name || "projet", true); objs = d.objs; hist = []; redoStack = []; refresh();
-    } catch { alert("Fichier de projet invalide."); }
-  } else alert("Format non pris en charge. Utilisez une image ou un projet .json.");
+  } else alert("Format non pris en charge. Utilisez une image.");
 }
 function download(blob, name) {
   const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name;
@@ -672,15 +664,11 @@ function exportPNG() {
   if ($("#optLegend").checked) drawLegend(g, c.width, c.height);
   c.toBlob(b => download(b, imgName + "-annote.png"), "image/png");
 }
-function saveProject() {
-  const blob = new Blob([JSON.stringify({ v: 1, name: imgName, img: imgData, objs })], { type: "application/json" });
-  download(blob, imgName + "-projet.json");
-}
 
 $("#bOpen").onclick = $("#bOpen2").onclick = () => $("#file").click();
 $("#file").onchange = e => { handleFile(e.target.files[0]); e.target.value = ""; };
 $("#bUndo").onclick = undo; $("#bRedo").onclick = redo;
-$("#bPng").onclick = exportPNG; $("#bSave").onclick = saveProject;
+$("#bPng").onclick = exportPNG;
 $("#bFinish").onclick = finishDraft; $("#bDelete").onclick = deleteSel;
 $("#bClear").onclick = () => { if (objs.length && confirm("Effacer tous les dessins ?")) { pushHist(); objs = []; sel = null; draft = null; refresh(); } };
 $("#zIn").onclick = () => zoomAt(1.4, cv.clientWidth / 2, cv.clientHeight / 2);
