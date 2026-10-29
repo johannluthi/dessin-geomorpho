@@ -75,6 +75,7 @@ main{grid-area:main;position:relative;min-width:0;min-height:0;background:var(--
     <button id="bUndo" title="Annuler (Ctrl+Z)">Annuler</button>
     <button id="bRedo" title="Rétablir (Ctrl+Maj+Z)">Rétablir</button>
     <label class="chk"><input type="checkbox" id="optLegend" checked> Légende dans l'export</label>
+    <label class="chk">Taille <input type="range" id="optLegendSize" min="1" max="4" step="0.25" value="2" style="width:90px"></label>
     <button id="bPng">Exporter en PNG</button>
     <button id="bSave">Enregistrer le projet</button>
     <input type="file" id="file" accept="image/*,.json,application/json" hidden>
@@ -468,7 +469,7 @@ function updateLegend() {
 }
 function drawLegend(g, W, H) {
   const items = legendItems(); if (!items.length) return;
-  const u = W / 1000, fs = 15 * u, pad = 10 * u, sw = 38 * u, rowH = fs * 1.7;
+  const k = +$("#optLegendSize").value, u = (W / 1000) * k, fs = 15 * u, pad = 10 * u, sw = 38 * u, rowH = fs * 1.7;
   g.save(); g.font = `${fs}px system-ui, -apple-system, "Segoe UI", sans-serif`;
   const tw = Math.max(...items.map(o => g.measureText(o.l).width), g.measureText("Légende").width);
   const bw = pad * 3 + sw + tw, bh = pad * 2 + rowH * (items.length + 1);
